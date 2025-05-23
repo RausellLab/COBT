@@ -1,0 +1,18 @@
+# Do not track content of files with these extensions
+*.bgz
+*.gz
+*.bed
+*.tmp
+*.log
+*.vcf
+*.tbi
+*.html
+*.pdf
+*.csv
+*.fa
+*.fai
+*.gff
+*.swp
+*.gtf
+*.pyc
+**/__pycache__/
