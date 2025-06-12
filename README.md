@@ -10,7 +10,7 @@ You can use your own version of R, but we recommand using the conda Renv provide
 
 First you need to clone this repo:
 ```
-git clone https://github.com/cbl-imagine/Case-Only-Burden-Test.git
+git clone https://github.com/RausellLab/COBT.git
 ```
 And then you will need to download and process several files, then you will be able to run the software on your workstation (server with multiple cores is recommended).
 
