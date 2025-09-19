@@ -77,8 +77,9 @@ mkdir intermediate_files/TEMP
 
 ##### CREATE REGION FILES #####
 
+nbr_samples="$(bcftools query -l $variants_samples | wc -l)"
 # Create 1-based tsv file (pseudo-bed file) with all regions covered in at least 10X in 90% of patients
-PYSPARK_SUBMIT_ARGS="--driver-memory 8g pyspark-shell" python src/Filter_patients_coverage_file.py $cores $max_memory $tmp_hail $cov_samples
+PYSPARK_SUBMIT_ARGS="--driver-memory 8g pyspark-shell" python src/Filter_patients_coverage_file.py $cores $max_memory $tmp_hail $cov_samples $nbr_samples
 # Filter gnomAD coverage file to create a 1-based tsv file (pseudo-bed file) of regions covered at 10X in at least 90% of the samples
 PYSPARK_SUBMIT_ARGS="--driver-memory 120g pyspark-shell" python src/Filter_gnomAD_coverage_file.py $cores $max_memory $tmp_hail
 # Intersect 1000G 1-based tsv mask with gnomAD

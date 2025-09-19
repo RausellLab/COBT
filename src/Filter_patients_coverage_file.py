@@ -12,6 +12,7 @@ core_nbr = int(argvL[1])
 max_mem = str(argvL[2])
 hail_tmp = str(argvL[3])
 cov_file = str(argvL[4])
+nbr_samples = int(argvL[5])
 
 os.environ['PYSPARK_SUBMIT_ARGS'] = "--driver-memory "+max_mem+" pyspark-shell"
 os.environ['TMPDIR'] = hail_tmp
@@ -34,7 +35,7 @@ patientsCov = patientsCov.rename({'f0':'chrom', 'f1':'start', 'f2':'end', 'f3':'
 # Filter X, Y and MT chromosomes
 patientsCov = patientsCov.filter((patientsCov.chrom == 'X') | (patientsCov.chrom == 'Y') |
                                  (patientsCov.chrom == 'MT'), keep = False)
-patientsCov = patientsCov.filter((patientsCov.median/497) >= 0.9, keep = True)
+patientsCov = patientsCov.filter((patientsCov.median/nbr_samples) >= 0.9, keep = True)
 # Export as a pandas dataframe
 patientsCov10X = patientsCov.to_pandas()
 patientsCov10X.chrom = pd.to_numeric(patientsCov10X.chrom)
