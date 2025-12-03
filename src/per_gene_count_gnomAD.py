@@ -1,6 +1,4 @@
-#!/data/antoine_data/anaconda2/bin/python2
-# -*- coding: utf-8 -*-
-# antoine.favier@institutimagine.org
+#!/usr/bin/env python3
 # script to calculate one probability per gene
 
 import os

@@ -1,21 +1,21 @@
 #!/bin/bash
-# antoine.favier@institutimagine.org
 
 help()
 {
   echo "Usage:
     Path to conda installation (path the the conda.sh file) [ -p | --conda_path ]
-    Number of cores you want to use for parallelization [ -c | --cores ]
-    Maximum memory to allocate per core [ -m | --max_memory ]
+    Number of cores to use for parallelization (e.g. 12) [ -c | --cores ]
+    Memory to allocate for Spark driver (e.g. 100g) [ -d | --driver_memory ]
+    Memory to allocate for Spark executors (e.g. 64g) [ -e | --executor_memory ]
     Path to the bgzipped vcf of the case samples [ -v | --variants_samples ]
     Path to the coverage file of the case samples [ -f | --cov_samples ]
     Path to a folder to store hail temporary files [ -t | --tmp_hail ]
-    Path to the VEP cache directory [ -d | --vep_cache_dir ]"
+    Path to the VEP cache directory [ -vep | --vep_cache_dir ]"
   exit 2
 }
 
-SHORT=p:,c:,m:,v:,f:,t:,,d:,h
-LONG=conda_path:,cores:,max_memory:,variants_samples:,cov_samples:,tmp_hail:,vep_cache_dir:,help
+SHORT=p:,c:,d:,e:,v:,f:,t:,vep:,h
+LONG=conda_path:,cores:,driver_memory:,executor_memory:,variants_samples:,cov_samples:,tmp_hail:,vep_cache_dir:,help
 OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
 
 if [ "$#" -eq 0 ]; then
@@ -35,8 +35,12 @@ do
       cores="$2"
       shift 2
       ;;
-    -m | --max_memory )
-      max_memory="$2"
+    -d | --driver_memory )
+      driver_memory="$2"
+      shift 2
+      ;;
+    -e | --executor_memory )
+      executor_memory="$2"
       shift 2
       ;;
     -v | --variants_samples )
@@ -51,7 +55,7 @@ do
       tmp_hail="$2"
       shift 2
       ;;
-    -d | --vep_cache_dir)
+    -vep | --vep_cache_dir)
       vep_cache_dir="$2"
       shift 2
       ;;
@@ -79,9 +83,9 @@ mkdir intermediate_files/TEMP
 
 nbr_samples="$(bcftools query -l $variants_samples | wc -l)"
 # Create 1-based tsv file (pseudo-bed file) with all regions covered in at least 10X in 90% of patients
-PYSPARK_SUBMIT_ARGS="--driver-memory 8g pyspark-shell" python src/Filter_patients_coverage_file.py $cores $max_memory $tmp_hail $cov_samples $nbr_samples
+python src/Filter_patients_coverage_file.py $cov_samples $nbr_samples
 # Filter gnomAD coverage file to create a 1-based tsv file (pseudo-bed file) of regions covered at 10X in at least 90% of the samples
-PYSPARK_SUBMIT_ARGS="--driver-memory 120g pyspark-shell" python src/Filter_gnomAD_coverage_file.py $cores $max_memory $tmp_hail
+python src/Filter_gnomAD_coverage_file.py -d $driver_memory -e $executor_memory -c $cores -t $tmp_hail
 # Intersect 1000G 1-based tsv mask with gnomAD
 intersectBed -a intermediate_files/filtered_coverage_gnomad.tsv -b intermediate_files/filtered_coverage_patients.tsv > intermediate_files/gnomAD_patients_1_based.tsv
 # Add some columns to the pseudo-bedfile and create more tmp files
@@ -116,7 +120,7 @@ vep -i data/patients_biallelic.vcf.bgz -o data/patients_annotated.vcf.bgz -e --s
 ##### RUN THE PREDICTIONS OF NUMBER OF VARIANTS IN GNOMAD #####
 
 conda activate COBT
-python src/gnomAD_count_proba.py -m $max_memory -t $tmp_hail -i data/gnomad_patients_all_chr.bed -o data/gnomad_all_chr_predicted.tsv
+python src/gnomAD_count_proba.py -c $cores -d $driver_memory -e $executor_memory -t $tmp_hail -i data/gnomad_patients_all_chr.bed -o data/gnomad_all_chr_predicted.tsv
 # Create a file with one count of variants per gene in gnomAD
 python src/per_gene_count_gnomAD.py
 
@@ -125,7 +129,7 @@ python src/per_gene_count_gnomAD.py
 # Create a list of the transcripts to keep
 cut -f2 data/gnomAD_count_table.tsv | sort | uniq -c | grep -v "transcript" > data/transcript_list.tsv
 # Keep only one APPRIS PRINCIPAL transcript per variant, filter by allele frequencies of the cohort and gnomAD and export all needed tables
-python src/filtering_export_analysis_tables.py $max_memory $tmp_hail
+python src/filtering_export_analysis_tables.py -c $cores -d $driver_memory -e $executor_memory -t $tmp_hail
 
 ##### ANALYZING THE RESULTS #####
 

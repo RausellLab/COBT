@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# antoine.favier@institutimagine.org
+#!/usr/bin/env python3
 # Export variant tables for all variants kept in the after case-only pipeline
 
 import os, argparse
@@ -8,19 +7,24 @@ import pandas as pd
 import numpy as np
 
 descr = "variants_genes_table.py \n"
-descr += "usage: python src/variants_genes_table.py -m 100g -t /data-tmp/antoine_data/hailTMP \n"
+descr += "usage: python src/variants_genes_table.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP \n"
 parser = argparse.ArgumentParser(description=descr)
-parser.add_argument('-m', '--max_memory', required=True, help='maximum memory to allocate')
+parser.add_argument('-d', '--driver_memory', required=True, help='memory for Spark driver (e.g. 100g)')
+parser.add_argument('-e', '--executor_memory', required=False, default="64g", help='memory for Spark executors (e.g. 64g)')
+parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
 parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
 
 args = parser.parse_args()
-max_mem = args.max_memory
-hail_tmp = args.tmp_hail
 
-os.environ['PYSPARK_SUBMIT_ARGS'] = "--driver-memory "+max_mem+" pyspark-shell"
-os.environ['TMPDIR'] = hail_tmp
-hl.init(spark_conf={"spark.local.<200b>​dir":hail_tmp,
-                    "spark.driver.extraJavaOptions":"-Djava.io.tmpdir="+hail_tmp})
+hl.init(
+    master=f"local[{args.cores}]",
+    spark_conf={
+        "spark.local.dir": args.tmp_hail,
+        "spark.driver.extraJavaOptions": f"-Djava.io.tmpdir={args.tmp_hail}",
+        "spark.driver.memory": args.driver_memory,
+        "spark.executor.memory": args.executor_memory
+    }
+)
 
 # Load the matrix table
 mat = hl.read_matrix_table(os.getcwd()+'/data/hail_matrix_patients.mt')

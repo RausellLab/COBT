@@ -1,29 +1,33 @@
-# -*- coding: utf-8 -*-
-# antoine.favier@institutimagine.org
+#!/usr/bin/env python3
 # Script to compute in gnomAD for all samples
 # the counts of synonymous missense and PTVs variants in the pre-defined regions
 
 import hail as hl
-import argparse, os
+import argparse
 
 descr = "gnomAD_count_proba.py \n"
-descr += "usage: python src/gnomAD_count_proba.py -m 100g -t /data-tmp/antoine_data/hailTMP -i data/gnomad_all_chr.bed -o data/gnomad_all_chr_predicted.bed \n"
+descr += "usage: python src/gnomAD_count_proba.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP -i data/gnomad_all_chr.bed -o data/gnomad_all_chr_predicted.bed \n"
 parser = argparse.ArgumentParser(description=descr)
-parser.add_argument('-m', '--max_memory', required=True, help='maximum memory to allocate')
+parser.add_argument('-d', '--driver_memory', required=True, help='memory for Spark driver (e.g. 100g)')
+parser.add_argument('-e', '--executor_memory', required=False, default="64g", help='memory for Spark executors (e.g. 64g)')
+parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
 parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
 parser.add_argument('-i', '--subRegionF', required=True, help='input subRegion file')
 parser.add_argument('-o', '--output', required=True, help='output expected probability tsv file')
 
 args = parser.parse_args()
-max_mem = args.max_memory
-hail_tmp = args.tmp_hail
 subRegionF = args.subRegionF
 output = args.output
 
-os.environ['PYSPARK_SUBMIT_ARGS'] = "--driver-memory "+max_mem+" pyspark-shell"
-os.environ['TMPDIR'] = hail_tmp
-hl.init(spark_conf={"spark.local.<200b>​dir":hail_tmp,
-                    "spark.driver.extraJavaOptions":"-Djava.io.tmpdir="+hail_tmp})
+hl.init(
+    master=f"local[{args.cores}]",
+    spark_conf={
+        "spark.local.dir": args.tmp_hail,
+        "spark.driver.extraJavaOptions": f"-Djava.io.tmpdir={args.tmp_hail}",
+        "spark.driver.memory": args.driver_memory,
+        "spark.executor.memory": args.executor_memory
+    }
+)
 
 max_AN = 125748*2 # Number of gnomAD samples in exomes overall
 

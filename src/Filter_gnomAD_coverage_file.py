@@ -1,23 +1,31 @@
-# -*- coding: utf-8 -*-
-# antoine.favier@institutimagine.org
-# Only keep regions covered in at least a median of 10X in gnomAD
+#!/usr/bin/env python3
+# Only keep regions covered in at least a coverage of 10X in gnomAD
 
-import sys, os, pandas as pd
+import pandas as pd
+import argparse
 import hail as hl
-from joblib import Parallel, delayed
 
-argvL = sys.argv
-core_nbr = int(argvL[1])
-max_mem = str(argvL[2])
-hail_tmp = str(argvL[3])
+descr = "Filter_gnomAD_coverage_file.py \n"
+descr += "usage: python src/Filter_gnomAD_coverage_file.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP \n"
+parser = argparse.ArgumentParser(description=descr)
+parser.add_argument('-d', '--driver_memory', required=True, help='memory for Spark driver (e.g. 100g)')
+parser.add_argument('-e', '--executor_memory', required=False, default="64g", help='memory for Spark executors (e.g. 64g)')
+parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
+parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
 
-os.environ['PYSPARK_SUBMIT_ARGS'] = "--driver-memory "+max_mem+" pyspark-shell"
-os.environ['TMPDIR'] = hail_tmp
-hl.init(spark_conf={"spark.local.<200b>​dir":hail_tmp,
-                    "spark.driver.extraJavaOptions":"-Djava.io.tmpdir="+hail_tmp})
+args = parser.parse_args()
 
+hl.init(
+    master=f"local[{args.cores}]",
+    spark_conf={
+        "spark.local.dir": args.tmp_hail,
+        "spark.driver.extraJavaOptions": f"-Djava.io.tmpdir={args.tmp_hail}",
+        "spark.driver.memory": args.driver_memory,
+        "spark.executor.memory": args.executor_memory
+    }
+)
 
-gnomad = hl.import_table('data/gnomad.exomes.coverage.summary.tsv.bgz', )
+gnomad = hl.import_table('data/gnomad.exomes.coverage.summary.tsv.bgz')
 gnomad = gnomad.drop('median',
                      'over_1',
                      'over_5',
@@ -31,48 +39,33 @@ gnomad = gnomad.drop('median',
 gnomad = gnomad.filter((gnomad.chrom == 'X') | (gnomad.chrom == 'Y') | (gnomad.chrom == 'MT'), keep = False)
 gnomad = gnomad.annotate(chrom = hl.int(gnomad.chrom))
 gnomad = gnomad.annotate(over_10 = hl.float(gnomad.over_10))
-gnomad = gnomad.filter(gnomad.over_10 >= 0.9, keep = True)
-gnomad_flt = gnomad.to_pandas()
-gnomad_flt.pos = pd.to_numeric(gnomad_flt.pos)
-gnomad_flt.chrom = pd.to_numeric(gnomad_flt.chrom)
+gnomad_flt = gnomad.filter(gnomad.over_10 >= 0.9, keep = True)
+# Convert to Pandas
+gnomad_pd = gnomad_flt.to_pandas()
+gnomad_pd.pos = pd.to_numeric(gnomad_pd.pos)
+gnomad_pd.chrom = pd.to_numeric(gnomad_pd.chrom)
+# Sort values by chromosome and start site
+gnomad_pd = gnomad_pd.sort_values(["chrom", "pos"]).reset_index(drop=True)
 
-chromosome = range(1,23)
+def merge_vectorized(sub):
+    # Create a vector of "previous" end value which is initialized by 0
+    prev_pos = sub["pos"].shift(fill_value=0)
+    # Breaks if start is higher than prev_end + 1 (gets true)
+    break_mask = sub["pos"] > (prev_pos + 1)
+    # group_id is being incremented at each break (true =+1; false =+0)
+    group_id = break_mask.cumsum()
+    # Aggregate by group: start = min(start), end = max(end)
+    merged = sub.groupby(group_id, as_index=False).agg(
+        chrom=("chrom","first"),
+        start=("pos","min"),
+        end=("pos","max")
+    )
+    return merged[["chrom","start","end"]]
 
-def gnomad_filter(chro):
-    chrom = []
-    start = []
-    end = []
-    chromToKeep = (gnomad_flt['chrom'] == chro)
-    gnomad_chr = gnomad_flt[chromToKeep]
-    for row in gnomad_chr.index:
-         gnomad_chr.loc[row, "pos"]
-         if start == []:
-             chrom.append(chro)
-             start.append(gnomad_chr.loc[row, "pos"])
-             posi = gnomad_chr.loc[row, "pos"]
-         elif gnomad_chr.loc[row, "pos"] == posi+1:
-             posi = gnomad_chr.loc[row, "pos"]
-         elif gnomad_chr.loc[row, "pos"] > posi+1:
-             end.append(posi)
-             chrom.append(chro)
-             start.append(gnomad_chr.loc[row, "pos"])
-             posi = gnomad_chr.loc[row, "pos"]
-    if len(start) > len(end):
-        end.append(posi)
-    df = pd.DataFrame({'chr' : chrom,
-                       'start' : start,
-                       'end' : end})
-    df = df[['chr','start','end']]
-    df2 = df.sort_values(by=['chr', 'start'])
-    df2.to_csv(os.getcwd()+'/intermediate_files/TEMP/filtered_coverage_gnomad_chr{}.tsv'.format(chro),
-               header=True, sep="\t", index=False)
+pseudoBed = (
+    gnomad_pd.groupby("chrom", group_keys=False)
+      .apply(merge_vectorized)
+      .sort_values(["chrom", "start"])
+)
 
-Parallel(n_jobs=core_nbr)(delayed(gnomad_filter)(chro) for chro in chromosome) # loop for each chromosome with parallelization
-
-# Concatenate all files
-dff = pd.read_csv(os.getcwd()+'/intermediate_files/TEMP/filtered_coverage_gnomad_chr1.tsv', sep='\t')
-for chro in chromosome[1:len(chromosome)]:
-    dff2 = pd.read_csv(os.getcwd()+'/intermediate_files/TEMP/filtered_coverage_gnomad_chr{}.tsv'.format(chro),
-                        sep='\t', dtype = {"Chromosome" : "str"})
-    dff = pd.concat([dff,dff2])
-dff.to_csv('intermediate_files/filtered_coverage_gnomad.tsv', header=True, sep="\t", index=False)
+pseudoBed.to_csv('intermediate_files/filtered_coverage_gnomad.tsv', header=True, sep="\t", index=False)

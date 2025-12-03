@@ -1,7 +1,4 @@
-# -*- coding: utf-8 -*-
-## yufei.luo@institutimagine.org
-## 23/10/2017
-## Modified by Antoine (antoine.favier@institutimagine.org) --> convert from python 2 to Python 3
+#!/usr/bin/env python3
 import sys
 
 argvL = sys.argv

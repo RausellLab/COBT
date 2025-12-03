@@ -1,5 +1,4 @@
 #!/usr/bin/env Rscript
-# antoine.favier@institutimagine.org
 # Test if some genes are over-mutated for a specific individual
 
 rm(list=ls())

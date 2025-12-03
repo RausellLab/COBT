@@ -1,22 +1,21 @@
-# -*- coding: utf-8 -*-
-# antoine.favier@institutimagine.org
+#!/usr/bin/env python3
 # Keep only 1 transcript (APPRIS PRINCIPAL) per variant and only synonymous and missense
 # Keep only variants at low frequency both in the patients cohort and in gnomAD
 # And export all the needed tables for analysis
 
-import os, sys
+import os
 import hail as hl
 import numpy as np
 import pandas as pd
+import argparse
 
-argvL = sys.argv
-max_mem = str(argvL[1])
-hail_tmp = str(argvL[2])
-
-os.environ['PYSPARK_SUBMIT_ARGS'] = "--driver-memory "+max_mem+" pyspark-shell"
-os.environ['TMPDIR'] = hail_tmp
-hl.init(spark_conf={"spark.local.<200b>​dir":hail_tmp,
-                    "spark.driver.extraJavaOptions":"-Djava.io.tmpdir="+hail_tmp})
+descr = "filtering_export_analysis_tables.py \n"
+descr += "usage: python src/filtering_export_analysis_tables.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP \n"
+parser = argparse.ArgumentParser(description=descr)
+parser.add_argument('-d', '--driver_memory', required=True, help='memory for Spark driver (e.g. 100g)')
+parser.add_argument('-e', '--executor_memory', required=False, default="64g", help='memory for Spark executors (e.g. 64g)')
+parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
+parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
 
 # import the list of APPRIS PRINCIPAL transcripts
 transcriptlist = os.getcwd()+'/data/transcript_list.tsv'

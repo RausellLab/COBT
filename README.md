@@ -1,6 +1,9 @@
 # Case-only Burden Test (COBT)
 
-COBT is a rare variant collapsing method that does not require controls. The method is a parametric test that uses [gnomAD](https://gnomad.broadinstitute.org/) exome data v2.1.1.\
+[![Preprint](https://img.shields.io/badge/COBT-MedRxiv-blue)](https://www.medrxiv.org/content/10.1101/2025.07.16.25331553v1)
+
+COBT is a rare variant collapsing method that does not require controls. A preprint is available on [MedRxiv](https://www.medrxiv.org/content/10.1101/2025.07.16.25331553v1).
+The method is a parametric test that uses [gnomAD](https://gnomad.broadinstitute.org/) exome data v2.1.1.\
 The method can be applied on WES and panel sequencing data aligned on GrCH37/hg19.
 
 Requirements:
@@ -97,11 +100,13 @@ Rscript src/case_only_burden_test.R -p kegg,hallmark,reactome
 Histograms of the distributions of p-values and manhattan plots of the p-values will be stored in `plots/` folder and lists of genes significantly enriched in synonymous, missense, protein truncating variants and protein altering variants will be stored in the `results/` folder.
 
 If you want to have access to the variants that were used to detect the hit genes, run this additional script still specifying:
-* the maximum memory to allocate for hail scripts in gigabytes `-m`
+* Spark driver memory you want to allocate `-d`
+* Spark executors memory you want to allocate `-e`
+* number of cores to use `-c`
 * the path to your hail temporary folder `-t`
 As in the following example:
 ```
 conda activate COBT
-python src/variants_genes_table.py -m 100g -t /data-tmp/antoine_data/hailTMP
+python src/variants_genes_table.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP
 ```
 The tables gathering the variants found in the burden genes identfied by the test will be stored in the `results/` folder.

@@ -1,7 +1,4 @@
-#!/usr/bin/python
-## python 2.7.14
-## yufei.luo@institutimagine.org 
-## 04/07/2022
+#!/usr/bin/env python3
 
 import sys
 

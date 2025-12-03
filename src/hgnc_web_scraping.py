@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# antoine.favier@institutimagine.org
+#!/usr/bin/env python3
 # Script to download HGNC gene symbols & other info
 
 import urllib, os
