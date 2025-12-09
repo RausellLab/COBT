@@ -73,9 +73,10 @@ In order to account for regions supposedly sufficiently covered in depth (we rec
 ## RUN THE PROGRAM
 
 Run the script that will prepare all the files you need to perform the burden testing. You have to specify several parameters:
-* the path to your conda (anaconda or miniconda) installation, more precisevly to your conda.sh file in order to run conda in the shell script `-p`
+* the path to your conda (anaconda or miniconda) installation, more precisely to your conda.sh file in order to run conda in the shell script `-p`
 * the number of cores you want to use for parallelization `-c`
-* the maximum memory to allocate for hail scripts in gigabytes `-m`
+* Spark driver memory you want to allocate `-d`
+* Spark executors memory you want to allocate `-e`
 * the path to your variant file (bgzipped vcf) `-v`
 * the path to your coverage file (tsv) `-f`
 * the path to your hail temporary folder `-t`
@@ -83,7 +84,7 @@ Run the script that will prepare all the files you need to perform the burden te
 
 Here is an example:
 ```
-bash src/PIPELINE.sh -p /usr/local/miniconda3/etc/profile.d/conda.sh -c 16 -m 100g -v /data-cbl/Ciliome/ciliomes_Nov2020.vcf.gz -f /data-cbl/Ciliome/10.count.497ciliomes.tsv.gz -t /data-tmp/antoine_data/hailTMP -d /home/my_work/.vep_cache/
+bash src/PIPELINE.sh -p /usr/local/miniconda3/etc/profile.d/conda.sh -c 16 -d 100g -e 64g -v /data-cbl/Ciliome/ciliomes_Nov2020.vcf.gz -f /data-cbl/Ciliome/10.count.497ciliomes.tsv.gz -t /data-tmp/antoine_data/hailTMP -d /home/my_work/.vep_cache/
 ```
 Once you have all the needed files, **you can run the Case-only Burden test**, choosing if you want to run it *only on genes or on pathways* as well. You can choose between:
 * [Hallmark](https://www.gsea-msigdb.org/gsea/msigdb/collection_details.jsp#H)
