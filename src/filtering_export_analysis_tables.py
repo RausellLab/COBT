@@ -17,6 +17,18 @@ parser.add_argument('-e', '--executor_memory', required=False, default="64g", he
 parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
 parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
 
+args = parser.parse_args()
+
+hl.init(
+    master=f"local[{args.cores}]",
+    spark_conf={
+        "spark.local.dir": args.tmp_hail,
+        "spark.driver.extraJavaOptions": f"-Djava.io.tmpdir={args.tmp_hail}",
+        "spark.driver.memory": args.driver_memory,
+        "spark.executor.memory": args.executor_memory
+    }
+)
+
 # import the list of APPRIS PRINCIPAL transcripts
 transcriptlist = os.getcwd()+'/data/transcript_list.tsv'
 
