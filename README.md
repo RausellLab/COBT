@@ -68,7 +68,7 @@ The protein coding information table `data/proteincodinggene_db_biomart_hg19_grc
 
 ### Prepare a coverage file
 In order to account for regions supposedly sufficiently covered in depth (we recommend a coverage depth of 10X in at least 90% of the samples), you need to provide a 1-based bed-like file (tabulated separated columns file with 4 columns: chromosome\t start\t end\t number of samples with at least 10X of coverage depth), the file should preferably to be bgzipped.\
-**Chromosome in the first column should only be a digit, no `chr` character before**
+**Chromosome in the first column should only be a digit, no `chr` character before.**
 
 ## RUN THE PROGRAM
 
@@ -86,17 +86,10 @@ Here is an example:
 ```
 bash src/PIPELINE.sh -p /usr/local/miniconda3/etc/profile.d/conda.sh -c 16 -d 100g -e 64g -v /data-cbl/Ciliome/ciliomes_Nov2020.vcf.gz -f /data-cbl/Ciliome/10.count.497ciliomes.tsv.gz -t /data-tmp/antoine_data/hailTMP -d /home/my_work/.vep_cache/
 ```
-Once you have all the needed files, **you can run the Case-only Burden test**, choosing if you want to run it *only on genes or on pathways* as well. You can choose between:
-* [Hallmark](https://www.gsea-msigdb.org/gsea/msigdb/collection_details.jsp#H)
-* [Reactome](https://www.gsea-msigdb.org/gsea/msigdb/collection_details.jsp#C2)
-* [KEGG](https://www.gsea-msigdb.org/gsea/msigdb/collection_details.jsp#C2)
-
-Pathways must be comma-separated. Here are a few examples:
+Finally, **you can run the Case-only Burden test**:
 ```
 conda activate Renv
 Rscript src/case_only_burden_test.R
-Rscript src/case_only_burden_test.R -p kegg
-Rscript src/case_only_burden_test.R -p kegg,hallmark,reactome
 ```
 Histograms of the distributions of p-values and manhattan plots of the p-values will be stored in `plots/` folder and lists of genes significantly enriched in synonymous, missense, protein truncating variants and protein altering variants will be stored in the `results/` folder.
 
