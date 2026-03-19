@@ -1,4 +1,4 @@
-#!/usr/bin/env Rscript
+#!/isr/binienv Rscript
 # Test if some genes are over-mutated for a specific individual
 
 rm(list=ls())
@@ -305,7 +305,7 @@ ptvHits <- data$exportTable %>% filter(pvalptv_lambda_cor_adj <= 0.05) %>%
   dplyr::rename(nb_var=NbrPTV, n_mut_ind=n_ind_mut_PTV, sum_accros_ind=sum_accros_ind_PTV, gnomAD_nb_var=gnomAD_PTV,
                 pval=pvalptv_lambda_cor, pval_adj=pvalptv_lambda_cor_adj)
 
-write.table(misHits, file="results/ptv_hits.tsv", sep="\t", row.names=F, quote=F)
+write.table(ptvHits, file="results/ptv_hits.tsv", sep="\t", row.names=F, quote=F)
 
 # Protein Altering
 
