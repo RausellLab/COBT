@@ -1,4 +1,4 @@
-#!/isr/binienv Rscript
+#!/usr/binienv Rscript
 # Test if some genes are over-mutated for a specific individual
 
 rm(list=ls())
