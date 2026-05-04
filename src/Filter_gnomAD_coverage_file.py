@@ -2,16 +2,17 @@
 # Only keep regions covered in at least a coverage of 10X in gnomAD
 
 import pandas as pd
-import argparse
+import argparse, os, sys
 import hail as hl
 
 descr = "Filter_gnomAD_coverage_file.py \n"
-descr += "usage: python src/Filter_gnomAD_coverage_file.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP \n"
+descr += "usage: python src/Filter_gnomAD_coverage_file.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP -a hg19"
 parser = argparse.ArgumentParser(description=descr)
 parser.add_argument('-d', '--driver_memory', required=True, help='memory for Spark driver (e.g. 100g)')
 parser.add_argument('-e', '--executor_memory', required=False, default="64g", help='memory for Spark executors (e.g. 64g)')
 parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
 parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
+parser.add_argument('-a', '--assembly', required=True, choices=['hg19', 'hg38'], help='Genome assembly: hg19 or hg38')
 
 args = parser.parse_args()
 
@@ -25,7 +26,15 @@ hl.init(
     }
 )
 
-gnomad = hl.import_table('data/gnomad.exomes.coverage.summary.tsv.bgz')
+gnomad_files_map = {
+    'hg19': '/data/gnomad.exomes.coverage.summary.tsv.bgz',
+    'hg38': '/data/gnomad.exomes.v4.0.coverage.summary.tsv.bgz'
+}
+gnomad_file = gnomad_files_map[args.assembly]
+if not os.path.exists(os.getcwd()+gnomad_file):
+    sys.exit(f"Error: File '{gnomad_file}' does not exist.")
+
+gnomad = hl.import_table(os.getcwd()+gnomad_file)
 gnomad = gnomad.drop('median',
                      'over_1',
                      'over_5',
@@ -68,4 +77,4 @@ pseudoBed = (
       .sort_values(["chrom", "start"])
 )
 
-pseudoBed.to_csv('intermediate_files/filtered_coverage_gnomad.tsv', header=True, sep="\t", index=False)
+pseudoBed.to_csv(os.getcwd()+'/intermediate_files/filtered_coverage_gnomad.tsv', header=True, sep="\t", index=False)

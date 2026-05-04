@@ -9,7 +9,7 @@ cov_file = str(argvL[1])
 nbr_samples = int(argvL[2])
 
 # Import the coverage file
-patientsCov = pd.read_csv(cov_file, sep="\t", header=None,
+patientsCov = pd.read_csv(os.getcwd()+'/'+cov_file, sep="\t", header=None,
     names=["chrom", "start", "end", "cov10X"],
     dtype={"chrom": "str", "start": "int32", "end": "int32", "cov10X": "int32"},
     compression="infer"
@@ -45,7 +45,7 @@ pseudoBed = (
 )
 
 # Export pseudo-bed file
-pseudoBed.to_csv('intermediate_files/filtered_coverage_patients.tsv',
+pseudoBed.to_csv(os.getcwd()+'/intermediate_files/filtered_coverage_patients.tsv',
     sep="\t",
     header=True,
     index=False

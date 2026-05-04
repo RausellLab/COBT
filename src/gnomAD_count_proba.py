@@ -3,7 +3,7 @@
 # the counts of synonymous missense and PTVs variants in the pre-defined regions
 
 import hail as hl
-import argparse
+import argparse, os
 
 descr = "gnomAD_count_proba.py \n"
 descr += "usage: python src/gnomAD_count_proba.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP -i data/gnomad_all_chr.bed -o data/gnomad_all_chr_predicted.bed \n"
@@ -14,10 +14,18 @@ parser.add_argument('-c', '--cores', required=True, help='number of cores to use
 parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
 parser.add_argument('-i', '--subRegionF', required=True, help='input subRegion file')
 parser.add_argument('-o', '--output', required=True, help='output expected probability tsv file')
+parser.add_argument('-a', '--assembly', required=True, choices=['hg19', 'hg38'], help='Genome assembly: hg19 or hg38')
 
 args = parser.parse_args()
 subRegionF = args.subRegionF
 output = args.output
+gnomad_files_map = {
+    'hg19': '/data/gnomad.exomes.r2.1.1.sites.ht',
+    'hg38': '/data/gnomad.exomes.v4.1.1.sites.ht'
+}
+gnomad_file = gnomad_files_map[args.assembly]
+if not os.path.exists(os.getcwd()+gnomad_file):
+    sys.exit(f"Error: File '{gnomad_file}' does not exist.")
 
 hl.init(
     master=f"local[{args.cores}]",
@@ -29,10 +37,13 @@ hl.init(
     }
 )
 
-max_AN = 125748*2 # Number of gnomAD samples in exomes overall
+max_AN = { # Number of gnomAD samples in exomes overall
+    'hg19': 125748*2,
+    'hg38': 730947*2
+}
 
 # Import gnomad table
-gnomad = hl.read_table('data/gnomad.exomes.r2.1.1.sites.ht')
+gnomad = hl.read_table(os.getcwd()+gnomad_file)
 # Keep only vep annotation and freq
 gnomad = gnomad.drop('allele_info',
                      'qual',
@@ -113,7 +124,11 @@ reg = reg.annotate(end = reg.interval.end.position)
 reg = reg.annotate(chrom = reg.interval.end.contig)
 reg = reg.annotate(pos = hl.range(reg.start,reg.end))
 reg = reg.explode(reg.pos)
-reg = reg.annotate(locus = hl.locus(reg.chrom, reg.pos, reference_genome='GRCh37'))
+refgen = {
+    'hg19': 'GRCh37',
+    'hg38': 'GRCh38'
+}
+reg = reg.annotate(locus = hl.locus(reg.chrom, reg.pos, reference_genome=refgen[args.assembly]))
 reg = reg.drop('pos', 'chrom', 'start', 'end')
 reg = reg.key_by('locus')
 
@@ -123,7 +138,7 @@ reg_gnomad = reg.annotate(vep = gnomad[reg.locus].vep, freq = gnomad[reg.locus].
 gnomad_index = gnomad.freq_index_dict['gnomad'].collect()[0]
 # Filter poorly sequenced variants
 reg_gnomad_flt = reg_gnomad.filter((reg_gnomad.freq.AC[gnomad_index] > 0) &
-                                   (reg_gnomad.freq.AN[gnomad_index] > (0.8 * max_AN)), keep = True)
+                                   (reg_gnomad.freq.AN[gnomad_index] > (0.8 * max_AN[args.assembly])), keep = True)
 transcriptIndex = reg_gnomad_flt.vep.transcript_consequences.transcript_id.index(reg_gnomad_flt.transcript)
         
 # Synonymous

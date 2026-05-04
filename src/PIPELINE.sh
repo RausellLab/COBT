@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 help()
 {
   echo "Usage:
@@ -10,16 +12,17 @@ help()
     Path to the bgzipped vcf of the case samples [ -v | --variants_samples ]
     Path to the coverage file of the case samples [ -f | --cov_samples ]
     Path to a folder to store hail temporary files [ -t | --tmp_hail ]
-    Path to the VEP cache directory [ -vep | --vep_cache_dir ]"
+    Path to the VEP cache directory [ -vep | --vep_cache_dir ]
+    Assembly on which your data was aligned on [ -a | --assembly ]"
   exit 2
 }
 
-SHORT=p:,c:,d:,e:,v:,f:,t:,vep:,h
-LONG=conda_path:,cores:,driver_memory:,executor_memory:,variants_samples:,cov_samples:,tmp_hail:,vep_cache_dir:,help
-OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
+SHORT=p:,c:,d:,e:,v:,f:,t:,vep:,a:,h
+LONG=conda_path:,cores:,driver_memory:,executor_memory:,variants_samples:,cov_samples:,tmp_hail:,vep_cache_dir:,assembly:,help
+OPTS=$(getopt -o --options $SHORT --longoptions $LONG -- "$@")
 
 if [ "$#" -eq 0 ]; then
-        help
+    help
 fi
 
 eval set -- "$OPTS"
@@ -59,6 +62,10 @@ do
       vep_cache_dir="$2"
       shift 2
       ;;
+    -a | --assembly)
+      assembly="$2"
+      shift 2
+      ;;
     -h | --help )
       help
       ;;
@@ -73,6 +80,12 @@ do
   esac
 done
 
+# Security check
+if [ "$assembly" != "hg19" ] && [ "$assembly" != "hg38" ]; then
+    echo "Error : assembly '$assembly' is not valid. Please, choose between hg19 and hg38."
+    exit 1
+fi
+
 source $conda_path
 conda activate COBT
 
@@ -85,7 +98,7 @@ nbr_samples="$(bcftools query -l $variants_samples | wc -l)"
 # Create 1-based tsv file (pseudo-bed file) with all regions covered in at least 10X in 90% of patients
 python src/Filter_patients_coverage_file.py $cov_samples $nbr_samples
 # Filter gnomAD coverage file to create a 1-based tsv file (pseudo-bed file) of regions covered at 10X in at least 90% of the samples
-python src/Filter_gnomAD_coverage_file.py -d $driver_memory -e $executor_memory -c $cores -t $tmp_hail
+python src/Filter_gnomAD_coverage_file.py -d $driver_memory -e $executor_memory -c $cores -t $tmp_hail -a $assembly
 # Intersect 1000G 1-based tsv mask with gnomAD
 intersectBed -a intermediate_files/filtered_coverage_gnomad.tsv -b intermediate_files/filtered_coverage_patients.tsv > intermediate_files/gnomAD_patients_1_based.tsv
 # Add some columns to the pseudo-bedfile and create more tmp files
@@ -93,9 +106,13 @@ python src/reformat.py intermediate_files/gnomAD_patients_1_based.tsv intermedia
 awk '{print $0"\t"$2"\t"$3}' intermediate_files/TEMP/gnomAD_patients_1_based_reg.tsv > intermediate_files/TEMP/gnomAD_patients_1_based_reg_more_cols.tsv
 # Create APPRIS principal transcripts file
 grep 'PRINCIPAL' data/appris_data.principal.txt > intermediate_files/appris_principal.txt
-gunzip -c /data-cbl/gencode/gencode.v19.annotation.gtf.gz > intermediate_files/gencode.gtf
-# Create the tsv file (1-based bed file) with all APPRIS Principal transcripts
-python src/restriction.py intermediate_files/appris_principal.txt intermediate_files/gencode.gtf data/gencode.CDS.appris_all.tsv all
+# Unzip Gencode before processing
+if [ "$assembly" == "hg19" ]; then
+    GENCODE="data/gencode.v19.annotation.gtf.gz"
+elif [ "$assembly" == "hg38" ]; then
+    GENCODE="data/gencode.v49.annotation.gtf.gz"
+fi
+gunzip -c "$GENCODE" > intermediate_files/gencode.gtf
 # Create the gencode file with only ONE APPRIS Principal transcript per gene
 python src/restriction.py intermediate_files/appris_principal.txt intermediate_files/gencode.gtf intermediate_files/gencode.CDS.appris.tsv one
 sort -V -k 1 -k 2 intermediate_files/gencode.CDS.appris.tsv > data/gencode.CDS.appris.sort.tsv
@@ -106,7 +123,12 @@ awk -v n=1 '{print $1, $2-n, $3, $4, $5, $6, $7, $8, $9}' OFS='\t' intermediate_
 # Remove duplicated regions in the bedfile
 awk '!a[$1$2$3]++' intermediate_files/filtered_coverage_gnomad_patients_0_based_gencode.bed > intermediate_files/filtered_coverage_gnomad_patients_0_based_gencode_unduplicated.bed
 # Remove segmental duplications and create the bed file to extract regions from VCFs
-subtractBed -a intermediate_files/filtered_coverage_gnomad_patients_0_based_gencode_unduplicated.bed -b <(zcat data/hg19-blacklist.v2.bed.gz | cut -f1,2,3 | sed 's/chr//') > intermediate_files/gnomad_patients_all_chr.bed
+if [ "$assembly" == "hg19" ]; then
+    BLACKLIST="data/hg19-blacklist.v2.bed.gz"
+elif [ "$assembly" == "hg38" ]; then
+    BLACKLIST="data/hg38-blacklist.v2.bed.gz"
+fi
+subtractBed -a intermediate_files/filtered_coverage_gnomad_patients_0_based_gencode_unduplicated.bed -b <(zcat "$BLACKLIST" | cut -f1,2,3 | sed 's/chr//') > intermediate_files/gnomad_patients_all_chr.bed
 awk '{print $1"\t"$2"\t"$3"\t"$4":"$5":"$6":"$7"-"$8":"$9}' intermediate_files/gnomad_patients_all_chr.bed > data/gnomad_patients_all_chr.bed
 
 ##### ANNOTATE VCFs #####
@@ -115,12 +137,17 @@ awk '{print $1"\t"$2"\t"$3"\t"$4":"$5":"$6":"$7"-"$8":"$9}' intermediate_files/g
 bcftools norm -Oz -m -any $variants_samples -o data/patients_biallelic.vcf.bgz
 
 conda activate vep_env
-vep -i data/patients_biallelic.vcf.bgz -o data/patients_annotated.vcf.bgz -e --species homo_sapiens -a GRCh37 --format vcf --no_stats --fork $cores --cache --vcf --dir_cache $vep_cache_dir --offline --compress_output bgzip > intermediate_files/TEMP/annotation_error.log
+if [ "$assembly" == "hg19" ]; then
+    GRCH="GRCh37"
+elif [ "$assembly" == "hg38" ]; then
+    GRCH="GRCh38"
+fi
+vep -i data/patients_biallelic.vcf.bgz -o data/patients_annotated.vcf.bgz -e --species homo_sapiens -a $GRCH --format vcf --no_stats --fork $cores --cache --vcf --dir_cache "$vep_cache_dir" --offline --compress_output bgzip > intermediate_files/TEMP/annotation_error.log
 
 ##### RUN THE PREDICTIONS OF NUMBER OF VARIANTS IN GNOMAD #####
 
 conda activate COBT
-python src/gnomAD_count_proba.py -c $cores -d $driver_memory -e $executor_memory -t $tmp_hail -i data/gnomad_patients_all_chr.bed -o data/gnomad_all_chr_predicted.tsv
+python src/gnomAD_count_proba.py -c $cores -d $driver_memory -e $executor_memory -t "$tmp_hail" -a $assembly -i data/gnomad_patients_all_chr.bed -o data/gnomad_all_chr_predicted.tsv
 # Create a file with one count of variants per gene in gnomAD
 python src/per_gene_count_gnomAD.py
 
@@ -129,7 +156,7 @@ python src/per_gene_count_gnomAD.py
 # Create a list of the transcripts to keep
 cut -f2 data/gnomAD_count_table.tsv | sort | uniq -c | grep -v "transcript" > data/transcript_list.tsv
 # Keep only one APPRIS PRINCIPAL transcript per variant, filter by allele frequencies of the cohort and gnomAD and export all needed tables
-python src/filtering_export_analysis_tables.py -c $cores -d $driver_memory -e $executor_memory -t $tmp_hail
+python src/filtering_export_analysis_tables.py -c $cores -d $driver_memory -e $executor_memory -t "$tmp_hail" -a $assembly
 
 ##### ANALYZING THE RESULTS #####
 

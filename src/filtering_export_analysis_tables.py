@@ -3,11 +3,10 @@
 # Keep only variants at low frequency both in the patients cohort and in gnomAD
 # And export all the needed tables for analysis
 
-import os
 import hail as hl
 import numpy as np
 import pandas as pd
-import argparse
+import argparse, os
 
 descr = "filtering_export_analysis_tables.py \n"
 descr += "usage: python src/filtering_export_analysis_tables.py -d 100g -e 64g -c 50 -t /data-tmp/antoine_data/hailTMP \n"
@@ -15,7 +14,8 @@ parser = argparse.ArgumentParser(description=descr)
 parser.add_argument('-d', '--driver_memory', required=True, help='memory for Spark driver (e.g. 100g)')
 parser.add_argument('-e', '--executor_memory', required=False, default="64g", help='memory for Spark executors (e.g. 64g)')
 parser.add_argument('-c', '--cores', required=True, help='number of cores to use (e.g. 12)')
-parser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
+piarser.add_argument('-t', '--tmp_hail', required=True, help='path to your hail temporary folder')
+parser.add_argument('-a', '--assembly', required=True, choices=['hg19', 'hg38'], help='Genome assembly: hg19 or hg38')
 
 args = parser.parse_args()
 
@@ -51,16 +51,20 @@ vcf = pd.read_csv(os.getcwd()+'/data/patients_annotated.vcf.bgz',
 # Check if the CHR column has only numbers or a 'chr' character and import the
 # annotated vcf as a hail matrix table
 chrTest = pd.DataFrame(vcf.get_chunk(1)).iloc[0,0]
+refgen = {
+    'hg19': 'GRCh37',
+    'hg38': 'GRCh38'
+}
 if chrTest[0:3] == 'chr':
     patients = hl.import_vcf(os.getcwd()+'/data/patients_annotated.vcf.bgz',
                               contig_recoding=dict_chr,
-                              reference_genome='GRCh37', force_bgz=True)
+                              reference_genome=refgen[args.assembly], force_bgz=True)
 else:
     patients = hl.import_vcf(os.getcwd()+'/data/patients_annotated.vcf.bgz',
-                          reference_genome='GRCh37', force_bgz=True)
+                          reference_genome=refgen[args.assembly], force_bgz=True)
 
 # Keep only "trustworthy well-covered regions" from patients and gnomAD
-bed = hl.import_bed(os.getcwd()+'/data/gnomad_patients_all_chr.bed', reference_genome='GRCh37')
+bed = hl.import_bed(os.getcwd()+'/data/gnomad_patients_all_chr.bed', reference_genome=refgen[args.assembly])
 regions = [row['interval'] for row in bed.collect()]
 patients_flt_reg = hl.filter_intervals(patients, regions)
 
@@ -129,7 +133,14 @@ patients_prun = patients_prun.annotate_rows(info = patients_prun.info.annotate(
     conseq = patients_prun.info.CSQ.split('\\|')[1]))
 
 # Add the gnomAD global Allele Frequency
-gnomad = hl.read_table('/data-cbl/gnomad/gnomad_hailtables/gnomad.exomes.r2.1.1.sites.ht')
+gnomad_files_map = {
+    'hg19': '/data/gnomad.exomes.r2.1.1.sites.ht',
+    'hg38': '/data/gnomad.exomes.v4.1.1.sites.ht'
+}
+gnomad_file = gnomad_files_map[args.assembly]
+if not os.path.exists(os.getcwd()+gnomad_file):
+    sys.exit(f"Error: File '{gnomad_file}' does not exist.")
+gnomad = hl.read_table(os.getcwd()+gnomad_file)
 gnomad = gnomad.key_by('locus')
 gnomad_index = gnomad.freq_index_dict['gnomad'].collect()[0]
 patients_gnomad = patients_prun.annotate_rows(freq = gnomad[patients_prun.locus].freq)

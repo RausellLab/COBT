@@ -1,4 +1,4 @@
-#!/usr/binienv Rscript
+#!/usr/bin/env Rscript
 # Test if some genes are over-mutated for a specific individual
 
 rm(list=ls())
@@ -9,9 +9,19 @@ library(readr)
 library(dplyr)
 library(gridExtra)
 library(grid)
-library(tibble)
 library(ggrepel)
 library(purrr)
+library(argparse)
+
+parser <- ArgumentParser(description="Process based on assembly version.")
+
+parser$add_argument("-a", "--assembly",
+                    type = character,
+                    required = TRUE,
+                    choices = c("hg19", "hg38"),
+                    help = "Genome assembly version: 'hg19' (GRCh37) or 'hg38' (GRCh38)")
+
+args <- parser$parse_args()
 
 theme_hist <- theme(panel.background=element_rect(fill="white"),
                     panel.grid=element_line(colour="gray"),
@@ -34,12 +44,23 @@ prob_theor <- read_tsv("data/gnomAD_count_table.tsv") %>%
 hgnc <- read_delim("data/hgnc_protein_coding.txt", col_names=T, delim="\t") %>%
   dplyr::select(symbol, ensembl_gene_id) %>% dplyr::rename(geneSymbol=symbol, ensg=ensembl_gene_id)
 
-# Table with ENSG and gene symbols correspondance and other stuff
-genedb <- read_tsv("data/proteincodinggene_db_biomart_hg19_grch37.tsv") %>% dplyr::select(-c("Gene start (bp)", "Gene end (bp)")) %>%
+# Check which biomart file to import
+if (args$assembly == "hg19") {
+  biomart <- "data/proteincodinggene_db_biomart_hg19_grch37.tsv"
+  cat(">> Utilisation du fichier pour HG19 (GRCh37)\n")
+} else if (args$assembly == "hg38") {
+  biomart <- "data/proteincodinggene_db_biomart_hg38_grch38.tsv"
+  cat(">> Utilisation du fichier pour HG38 (GRCh38)\n")
+}
+
+# Table with ENSG and gene symbols correspondence and other stuff
+genedb <- read_tsv(biomart) %>%
+  dplyr::select(-c("Gene start (bp)", "Gene end (bp)")) %>%
   dplyr::rename(ENSG="Gene stable ID", transcript="Transcript stable ID", chrom="Chromosome/scaffold name",
                 TransStart="Transcript start (bp)", TransEnd="Transcript end (bp)", TSS="Transcription start site (TSS)",
                 TranscriptLength="Transcript length (including UTRs and CDS)", geneSymbol="Gene name", GC_perc="Gene % GC content") %>%
-  filter(chrom %in% prob_theor$chromosome) %>% filter(transcript %in% prob_theor$transcript) %>%
+  filter(chrom %in% prob_theor$chromosome) %>%
+  filter(transcript %in% prob_theor$transcript) %>%
   dplyr::mutate(usedtrans=map_dbl(ENSG, function(x) prob_theor$length[which(prob_theor$geneID == x)])) %>%
   dplyr::mutate(ratiotrans=(usedtrans/TranscriptLength)*100)
 # Poorly covered genes
@@ -314,6 +335,6 @@ altHits <- data$exportTable %>% filter(pvalalt_lambda_cor_adj <= 0.05) %>%
                 n_ind_mut_alt, sum_accros_ind_alt, gnomAD_alt, pvalalt_lambda_cor, pvalalt_lambda_cor_adj) %>%
   dplyr::mutate(patients_with_variant=map_chr(ENSG, function(x) paste(unlist(names(which(data$tot_alt[x,] != 0))), collapse=";"))) %>%
   dplyr::rename(nb_var=NbrProtAltVar, n_mut_ind=n_ind_mut_alt, sum_accros_ind=sum_accros_ind_alt, gnomAD_nb_var=gnomAD_alt,
-                pval=pvalalt_lambda_cor_adj, pval_adj=pvalalt_lambda_cor_adj)
+                pval=pvalalt_lambda_cor, pval_adj=pvalalt_lambda_cor_adj)
 
 write.table(altHits, file="results/protein_altering_hits.tsv", sep="\t", row.names=F, quote=F)
