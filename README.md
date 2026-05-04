@@ -1,6 +1,6 @@
 # Case-only Burden Test (COBT)
 
-[![Genome Medicine](https://img.shields.io/badge/COBT-Genome Medicine-blue)](https://doi.org/10.1186/s13073-026-01619-9)
+[![GenomeMedicine](https://img.shields.io/badge/COBT-Genome_Medicine-blue)](https://doi.org/10.1186/s13073-026-01619-9)
 
 COBT is a rare variant collapsing method that does not require controls. The peer-reviewed article is available in open access in [Genome Medicine](https://doi.org/10.1186/s13073-026-01619-9).
 The method is based on a parametric test. Currently, it can be applied on autosomal variants from Whole-Exome Sequencing and panel sequencing data aligned on GrCH37/hg19 or GrCH38/hg38 and uses [gnomAD](https://gnomad.broadinstitute.org/) exome data v2.1.1 or v4.1.0.\
